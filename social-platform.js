@@ -22,6 +22,9 @@ const database = firebase.database();
 // - DELETE /api/files/:postId/:filename (optional, for file deletion)
 const API_BASE_URL = 'http://kttc-dockerhost.kttc.local:5500/api'; // Update with your local server URL
 
+// Version
+const APP_VERSION = '1.0.0'; // Update this when deploying new versions
+
 // Global state
 let currentUser = null;
 let userPermissions = null;
@@ -1124,6 +1127,12 @@ function setupUploadForm() {
 // Set up form when page loads
 document.addEventListener('DOMContentLoaded', function() {
     setupUploadForm();
+    
+    // Set version number
+    const versionElement = document.getElementById('appVersion');
+    if (versionElement) {
+        versionElement.textContent = APP_VERSION;
+    }
 });
 
 // Handle files (from both drag-drop and file input)

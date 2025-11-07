@@ -114,6 +114,45 @@ header {
     font-weight: 500;
 }
 
+/* Footer */
+.app-footer {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 1rem 0;
+    margin-top: 2rem;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.version-info {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.version-label {
+    font-weight: 500;
+}
+
+.version-number {
+    font-family: 'Courier New', monospace;
+    background: #ecf0f1;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
 /* Buttons */
 .btn-primary {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1271,6 +1310,18 @@ main {
         margin-top: 1rem;
         flex-direction: column;
         gap: 0.5rem;
+    }
+
+    .app-footer {
+        padding: 0.75rem 0;
+    }
+
+    .footer-content {
+        padding: 0 1rem;
+    }
+
+    .version-info {
+        font-size: 0.8rem;
     }
 
     .editor-welcome-section {

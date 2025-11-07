@@ -15,12 +15,12 @@ const auth = firebase.auth();
 const database = firebase.database();
 
 // Configuration
-// IMPORTANT: Update this URL to match your local file server API endpoint
-// The API should support:
+// API endpoint for Docker container
+// The API supports:
 // - POST /api/upload (multipart/form-data with file, postId, filename)
 // - GET /api/files/:postId/:filename (download file)
 // - DELETE /api/files/:postId/:filename (optional, for file deletion)
-const API_BASE_URL = 'http://kttc-dockerhost.kttc.local:5500/api'; // Update with your local server URL
+const API_BASE_URL = 'http://kttc-dockerhost.kttc.local:5500/api';
 
 // Version
 const APP_VERSION = '1.0.0'; // Update this when deploying new versions

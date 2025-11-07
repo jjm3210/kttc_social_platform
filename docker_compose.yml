@@ -7,7 +7,7 @@ services:
       dockerfile: dockerfile
     ports:
       - "5500:5500"
-    container_name: kttc_social_platform_web
+    container_name: kttc_social_platform
     restart: unless-stopped
     volumes:
       - "/mnt/nfs/rossxp/tech/social_platform:/upload"

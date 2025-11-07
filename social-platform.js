@@ -20,7 +20,7 @@ const database = firebase.database();
 // - POST /api/upload (multipart/form-data with file, postId, filename)
 // - GET /api/files/:postId/:filename (download file)
 // - DELETE /api/files/:postId/:filename (optional, for file deletion)
-const API_BASE_URL = 'http://localhost:3000/api'; // Update with your local server URL
+const API_BASE_URL = 'http://kttc-dockerhost.kttc.local:5500/api'; // Update with your local server URL
 
 // Global state
 let currentUser = null;
@@ -95,7 +95,7 @@ auth.onAuthStateChanged(async (user) => {
         // Load initial data
         loadPosts();
     } else {
-        window.location.href = '../Hub/kttc-hub.html';
+        window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
     }
 });
 
@@ -127,7 +127,7 @@ function showAccessDenied() {
 // Logout
 function logout() {
     auth.signOut().then(() => {
-        window.location.href = '../Hub/kttc-hub.html';
+        window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
     }).catch((error) => {
         console.error('Error signing out:', error);
         alert('Error signing out. Please try again.');
@@ -1202,4 +1202,5 @@ function removeFile(index) {
     selectedFiles.forEach(file => dataTransfer.items.add(file));
     fileInput.files = dataTransfer.files;
 }
+
 

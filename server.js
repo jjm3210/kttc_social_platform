@@ -5,7 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5500;
 
 // Enable CORS - Allow all origins for development (restrict in production)
 app.use(cors({
@@ -14,6 +14,15 @@ app.use(cors({
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Serve static files from the current directory (where server.js is located)
+// This will make social-platform.html, social-platform.css, and social-platform.js accessible.
+app.use(express.static(__dirname));
+
+// For the root URL, send the social-platform.html file
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'social-platform.html'));
+});
 
 // Create uploads directory if it doesn't exist
 const UPLOAD_DIR = path.join(__dirname, 'uploads', 'social-posts');
@@ -268,12 +277,14 @@ app.use((error, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`\n========================================`);
+    console.log(`
+========================================`);
     console.log(`File Upload API Server`);
     console.log(`========================================`);
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Upload directory: ${UPLOAD_DIR}`);
     console.log(`Health check: http://localhost:${PORT}/api/health`);
-    console.log(`========================================\n`);
+    console.log(`========================================
+`);
 });
 

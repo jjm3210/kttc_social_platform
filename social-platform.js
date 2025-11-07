@@ -95,7 +95,7 @@ auth.onAuthStateChanged(async (user) => {
         // Load initial data
         loadPosts();
     } else {
-        window.location.href = '../Hub/kttc-hub.html';
+        window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
     }
 });
 
@@ -127,7 +127,7 @@ function showAccessDenied() {
 // Logout
 function logout() {
     auth.signOut().then(() => {
-        window.location.href = '../Hub/kttc-hub.html';
+        window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
     }).catch((error) => {
         console.error('Error signing out:', error);
         alert('Error signing out. Please try again.');

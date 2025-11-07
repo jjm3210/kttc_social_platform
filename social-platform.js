@@ -15,12 +15,12 @@ const auth = firebase.auth();
 const database = firebase.database();
 
 // Configuration
-// API endpoint for Docker container
+// API endpoint - using relative path since frontend and API are on same origin
 // The API supports:
 // - POST /api/upload (multipart/form-data with file, postId, filename)
 // - GET /api/files/:postId/:filename (download file)
 // - DELETE /api/files/:postId/:filename (optional, for file deletion)
-const API_BASE_URL = 'http://kttc-dockerhost.kttc.local:5500/api';
+const API_BASE_URL = '/api';
 
 // Version
 const APP_VERSION = '1.0.0'; // Update this when deploying new versions
@@ -1050,10 +1050,17 @@ function setupUploadForm() {
                         console.error('Error message:', fetchError.message);
                         console.error('Error stack:', fetchError.stack);
                         
+                        // Check for mixed content issue (HTTPS page trying to access HTTP API)
+                        const isHTTPS = window.location.protocol === 'https:';
+                        const isHTTPAPI = API_BASE_URL.startsWith('http://');
+                        const isMixedContent = isHTTPS && isHTTPAPI;
+                        
                         if (fetchError.name === 'AbortError') {
                             throw new Error(`Upload timeout: The server did not respond within 30 seconds. Please check if the server is running on ${API_BASE_URL}`);
+                        } else if (isMixedContent && (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError') || fetchError.name === 'TypeError')) {
+                            throw new Error(`Mixed Content Error: This page is served over HTTPS but the API is HTTP. Browsers block HTTPS pages from accessing HTTP APIs for security. Solutions: 1) Use HTTPS for the API, 2) Use a reverse proxy, or 3) Access the page over HTTP instead of HTTPS.`);
                         } else if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
-                            throw new Error(`Network error: Could not connect to server at ${API_BASE_URL}. Please ensure the server is running.`);
+                            throw new Error(`Network error: Could not connect to server at ${API_BASE_URL}. Please ensure the server is running and accessible from your network.`);
                         } else {
                             throw new Error(`Network error uploading file: ${file.name}. ${fetchError.message}`);
                         }

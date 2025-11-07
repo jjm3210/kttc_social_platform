@@ -33,7 +33,15 @@ let allPosts = [];
 let selectedFiles = [];
 
 // Check authentication and permissions
+let authCheckTimeout = null;
+
 auth.onAuthStateChanged(async (user) => {
+    // Clear any pending redirect timeout
+    if (authCheckTimeout) {
+        clearTimeout(authCheckTimeout);
+        authCheckTimeout = null;
+    }
+    
     if (user) {
         currentUser = user;
         document.getElementById('userEmail').textContent = user.email;
@@ -98,7 +106,23 @@ auth.onAuthStateChanged(async (user) => {
         // Load initial data
         loadPosts();
     } else {
-        window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
+        // Wait a moment for Firebase to check for existing sessions
+        // This is especially important when accessing directly from Docker host
+        authCheckTimeout = setTimeout(() => {
+            // Check if we're accessing from Docker host
+            const isDockerHost = window.location.hostname.includes('kttc-dockerhost') || 
+                                 window.location.hostname.includes('kttc.local');
+            
+            if (isDockerHost) {
+                // If accessing from Docker host, redirect to hub for authentication
+                // Include return URL so user can come back after auth
+                const returnUrl = encodeURIComponent(window.location.href);
+                window.location.href = `https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html?returnUrl=${returnUrl}`;
+            } else {
+                // If accessing from SFTP server, redirect to hub
+                window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
+            }
+        }, 1000); // Wait 1 second for Firebase to check for existing sessions
     }
 });
 

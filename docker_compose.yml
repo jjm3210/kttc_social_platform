@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: dockerfile
     ports:
-      - "5500:5500
+      - "5500:5500"
     container_name: kttc_social_platform_web
     restart: unless-stopped
     volumes:

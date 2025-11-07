@@ -20,7 +20,7 @@ const database = firebase.database();
 // - POST /api/upload (multipart/form-data with file, postId, filename)
 // - GET /api/files/:postId/:filename (download file)
 // - DELETE /api/files/:postId/:filename (optional, for file deletion)
-const API_BASE_URL = 'http://localhost:3000/api'; // Update with your local server URL
+const API_BASE_URL = 'http://kttc-dockerhost.kttc.local:5500/api'; // Update with your local server URL
 
 // Global state
 let currentUser = null;
@@ -1202,4 +1202,5 @@ function removeFile(index) {
     selectedFiles.forEach(file => dataTransfer.items.add(file));
     fileInput.files = dataTransfer.files;
 }
+
 

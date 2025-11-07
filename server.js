@@ -5,7 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5500;
 
 // Enable CORS - Allow all origins for development (restrict in production)
 app.use(cors({
@@ -287,3 +287,4 @@ app.listen(PORT, () => {
     console.log(`========================================
 `);
 });
+

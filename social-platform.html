@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Platform - KTTC Hub</title>
+    <link rel="stylesheet" href="social-platform.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Access Denied Screen -->
+    <div id="accessDeniedScreen" class="access-denied-screen" style="display: none;">
+        <div class="access-denied-container">
+            <h2>⚠️ Access Denied</h2>
+            <p>You don't have permission to access the Social Platform.</p>
+            <button onclick="window.location.href='../Hub/kttc-hub.html'" class="btn-primary">Go to Hub</button>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" style="display: none;">
+        <header>
+            <div class="header-content">
+                <button class="btn-secondary back-to-hub-btn" onclick="window.location.href='../Hub/kttc-hub.html'">Back to Hub</button>
+                <h1>📱 Social Platform</h1>
+                <p>Manage social media content and posts</p>
+                <div class="user-info">
+                    <span id="userEmail"></span>
+                    <button class="btn-secondary" onclick="logout()">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="container">
+                <!-- Editor Welcome Section -->
+                <div id="editorWelcomeSection" class="editor-welcome-section" style="display: none;">
+                    <div class="editor-welcome-content">
+                        <div class="editor-welcome-header">
+                            <h2 id="editorWelcomeTitle" class="editor-welcome-title">Welcome</h2>
+                            <button class="btn-primary editor-upload-btn" onclick="openUploadModal()">📤 Upload Post</button>
+                        </div>
+                        <div class="editor-welcome-stats">
+                            <div class="editor-stat-item">
+                                <span class="editor-stat-label">Pending Posts:</span>
+                                <span id="editorPendingCount" class="editor-stat-value">0</span>
+                            </div>
+                            <div class="editor-stat-item" id="authorizedPostsStat" style="display: none;">
+                                <span class="editor-stat-label">Authorized Posts:</span>
+                                <span id="editorAuthorizedCount" class="editor-stat-value">0</span>
+                            </div>
+                            <div class="editor-stat-item">
+                                <span class="editor-stat-label">Next Scheduled:</span>
+                                <span id="editorNextScheduled" class="editor-stat-value">No posts scheduled</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Posts Section -->
+                <div id="postsView" class="posts-section">
+                    <div class="view-header">
+                        <h2>All Posts</h2>
+                        <div class="filter-controls">
+                            <input type="text" id="searchInput" placeholder="Search posts..." onkeyup="filterPosts()">
+                        </div>
+                    </div>
+                    <div id="postsContainer" class="swimlanes-container">
+                        <!-- Swimlanes will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Post Detail Modal -->
+        <div id="postDetailModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Post Details</h3>
+                    <button class="close-btn" onclick="closePostDetail()">&times;</button>
+                </div>
+                <div class="modal-body" id="postDetailBody">
+                    <!-- Post details will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Preview Modal -->
+        <div id="contentPreviewModal" class="modal" style="display: none;">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3 id="contentPreviewTitle">Content Preview</h3>
+                    <button class="close-btn" onclick="closeContentPreview()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="contentPreviewBody" class="content-preview-body">
+                        <!-- Content will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirmModal" class="modal" style="display: none;">
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <h3 id="confirmModalTitle">Confirm Action</h3>
+                    <button class="close-btn" onclick="closeConfirmModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmModalMessage">Are you sure you want to proceed?</p>
+                    <div class="confirm-actions">
+                        <button id="confirmBtn" class="btn-danger" onclick="confirmAction()">Confirm</button>
+                        <button class="btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Post Modal -->
+        <div id="uploadModal" class="modal" style="display: none;">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3>Upload New Post</h3>
+                    <button class="close-btn" onclick="closeUploadModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="uploadForm" class="upload-form">
+                        <div class="form-group">
+                            <label for="postTitle">Title *</label>
+                            <input type="text" id="postTitle" required placeholder="Enter post title">
+                        </div>
+                        <div class="form-group">
+                            <label for="postContent">Content/Description *</label>
+                            <textarea id="postContent" required rows="6" placeholder="Enter post content/description"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="scheduledDate">Scheduled Post Date *</label>
+                            <input type="date" id="scheduledDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="postLink">Link (Optional)</label>
+                            <input type="url" id="postLink" placeholder="https://example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="fileUpload">Media Files (Images/Videos) *</label>
+                            <div id="dropZone" class="drop-zone">
+                                <div class="drop-zone-content">
+                                    <p class="drop-zone-icon">📁</p>
+                                    <p class="drop-zone-text">Drag and drop files here, or click to browse</p>
+                                    <p class="drop-zone-hint">Supports images and videos</p>
+                                </div>
+                                <input type="file" id="fileUpload" multiple accept="image/*,video/*" required>
+                            </div>
+                            <div id="filePreview" class="file-preview"></div>
+                        </div>
+                        <div id="uploadProgress" class="upload-progress" style="display: none;">
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
+                            <p id="progressText">Uploading...</p>
+                        </div>
+                        <div id="uploadStatus" class="status-message"></div>
+                        <div class="form-group">
+                            <label>Post to Social Platforms *</label>
+                            <div class="platform-checkboxes">
+                                <label class="platform-checkbox">
+                                    <input type="checkbox" id="platform-facebook" value="facebook">
+                                    <span class="platform-label">Facebook</span>
+                                </label>
+                                <label class="platform-checkbox">
+                                    <input type="checkbox" id="platform-instagram" value="instagram">
+                                    <span class="platform-label">Instagram</span>
+                                </label>
+                                <label class="platform-checkbox">
+                                    <input type="checkbox" id="platform-youtube" value="youtube">
+                                    <span class="platform-label">YouTube</span>
+                                </label>
+                                <label class="platform-checkbox">
+                                    <input type="checkbox" id="platform-tiktok" value="tiktok">
+                                    <span class="platform-label">TikTok</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Upload Post</button>
+                            <button type="button" class="btn-secondary" onclick="closeUploadModal()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
+    <script src="social-platform.js"></script>
+</body>
+</html>
+

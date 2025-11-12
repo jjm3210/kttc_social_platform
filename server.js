@@ -357,11 +357,29 @@ app.post('/api/create-custom-token', async (req, res) => {
         console.log(`Custom token preview (first 50 chars): ${customToken.substring(0, 50)}...`);
         console.log(`JWT parts count: ${jwtParts.length}`);
         
+        // Decode JWT payload to verify audience (should match project ID)
+        try {
+            const payload = JSON.parse(Buffer.from(jwtParts[1], 'base64').toString('utf-8'));
+            console.log('Custom token payload audience:', payload.aud);
+            console.log('Custom token payload issuer:', payload.iss);
+            console.log('Custom token payload subject (UID):', payload.sub);
+            
+            // Verify audience matches project ID
+            if (payload.aud !== 'kttc-hub-auth') {
+                console.error('WARNING: Custom token audience does not match project ID!');
+                console.error('Expected: kttc-hub-auth, Got:', payload.aud);
+            }
+        } catch (e) {
+            console.warn('Could not decode JWT payload for inspection:', e.message);
+        }
+        
         // Ensure token doesn't have any unexpected characters that could corrupt it
         if (customToken.includes('\n') || customToken.includes('\r') || customToken.includes(' ')) {
             console.warn('Warning: Custom token contains unexpected whitespace characters');
         }
         
+        // Send response with explicit content type and ensure token is sent as-is
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.json({
             success: true,
             customToken: customToken

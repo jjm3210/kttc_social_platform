@@ -3,9 +3,35 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
+const admin = require('firebase-admin');
 
 const app = express();
 const PORT = process.env.PORT || 5500;
+
+// Initialize Firebase Admin SDK
+// Using service account file (same directory as server.js)
+try {
+    const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('Firebase Admin SDK initialized from service account file');
+} catch (error) {
+    console.error('Error initializing Firebase Admin SDK:', error);
+    console.warn('Custom token endpoint will not work without Firebase Admin SDK.');
+    // Try fallback to environment variable if file doesn't exist
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        try {
+            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount)
+            });
+            console.log('Firebase Admin SDK initialized from environment variable (fallback)');
+        } catch (envError) {
+            console.error('Error initializing from environment variable:', envError);
+        }
+    }
+}
 
 // Enable CORS - Allow all origins for development (restrict in production)
 app.use(cors({
@@ -14,6 +40,9 @@ app.use(cors({
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Parse JSON bodies
+app.use(express.json());
 
 // Serve static files from the current directory (where server.js is located)
 // This will make social-platform.html, social-platform.css, and social-platform.js accessible.
@@ -253,6 +282,50 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// POST /api/create-custom-token - Create custom token from ID token
+// This endpoint allows the hub to exchange an ID token for a custom token
+// which can be used to authenticate on the social platform
+app.post('/api/create-custom-token', async (req, res) => {
+    try {
+        const { idToken } = req.body;
+        
+        if (!idToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'ID token is required'
+            });
+        }
+        
+        // Verify the ID token
+        let decodedToken;
+        try {
+            decodedToken = await admin.auth().verifyIdToken(idToken);
+        } catch (error) {
+            console.error('Error verifying ID token:', error);
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid or expired ID token'
+            });
+        }
+        
+        // Create custom token for the user
+        const customToken = await admin.auth().createCustomToken(decodedToken.uid);
+        
+        console.log(`Custom token created for user: ${decodedToken.email} (${decodedToken.uid})`);
+        
+        res.json({
+            success: true,
+            customToken: customToken
+        });
+    } catch (error) {
+        console.error('Error creating custom token:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to create custom token'
+        });
+    }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
     console.error('Error middleware caught:', error);
@@ -288,6 +361,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`API Base: http://kttc-dockerhost.kttc.local:${PORT}/api`);
     console.log(`Upload directory: ${UPLOAD_DIR}`);
     console.log(`Health check: http://kttc-dockerhost.kttc.local:${PORT}/api/health`);
+    console.log(`Custom token endpoint: http://kttc-dockerhost.kttc.local:${PORT}/api/create-custom-token`);
     console.log(`========================================
 `);
 });

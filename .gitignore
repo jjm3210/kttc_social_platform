@@ -4,3 +4,7 @@ uploads/
 .DS_Store
 .env
 
+# Firebase service account keys (sensitive credentials)
+*-firebase-adminsdk-*.json
+kttc-hub-auth-firebase-adminsdk-*.json
+

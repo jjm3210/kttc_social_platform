@@ -16,8 +16,20 @@ try {
     try {
         adminApp = admin.app();
         console.log('Firebase Admin SDK already initialized');
+        // Verify it's using the correct project
+        if (adminApp.options.projectId !== 'kttc-hub-auth') {
+            console.warn('WARNING: Existing app has wrong project ID:', adminApp.options.projectId);
+            console.warn('This may cause custom token creation issues!');
+            // Delete and reinitialize if wrong project
+            adminApp.delete();
+            adminApp = null;
+        }
     } catch (e) {
         // Not initialized yet, proceed with initialization
+    }
+    
+    // Initialize if not already done
+    if (!adminApp) {
         const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
         adminApp = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
@@ -26,6 +38,8 @@ try {
         console.log('Firebase Admin SDK initialized from service account file');
         console.log('Project ID:', serviceAccount.project_id);
         console.log('Service account email:', serviceAccount.client_email);
+        console.log('App name:', adminApp.name);
+        console.log('App project ID:', adminApp.options.projectId);
     }
 } catch (error) {
     console.error('Error initializing Firebase Admin SDK:', error);
@@ -321,16 +335,37 @@ app.post('/api/create-custom-token', async (req, res) => {
         }
         
         // Create custom token for the user
-        // Use the admin app instance to ensure we're using the correct project
-        const auth = admin.auth();
+        // Get the auth instance from the default app to ensure correct initialization
+        const defaultApp = admin.app();
+        const auth = defaultApp.auth();
         
         // Verify the UID we're about to use
         console.log('About to create custom token with UID:', decodedToken.uid);
         console.log('UID type:', typeof decodedToken.uid);
         console.log('UID length:', decodedToken.uid ? decodedToken.uid.length : 'null');
+        console.log('Default app project ID:', defaultApp.options.projectId);
+        console.log('Default app name:', defaultApp.name);
+        console.log('Default app credential type:', defaultApp.options.credential ? 'cert' : 'none');
+        
+        // Ensure UID is a non-empty string
+        if (!decodedToken.uid || typeof decodedToken.uid !== 'string') {
+            throw new Error('Invalid UID: must be a non-empty string');
+        }
+        
+        const uidString = String(decodedToken.uid).trim();
+        if (!uidString || uidString.length === 0) {
+            throw new Error('UID is empty after trimming');
+        }
+        
+        console.log('Creating token with UID string:', uidString);
+        console.log('UID string length:', uidString.length);
+        console.log('UID string matches original:', uidString === decodedToken.uid);
         
         // Create the custom token - this should set the subject (sub) to the user's UID
-        const customToken = await auth.createCustomToken(decodedToken.uid);
+        // The Admin SDK should automatically set sub=uid, but we're seeing sub=service account email
+        // This suggests an initialization or version issue
+        // Try without additional claims first
+        const customToken = await auth.createCustomToken(uidString);
         
         // Log additional info for debugging
         console.log('Creating custom token for UID:', decodedToken.uid);
@@ -369,16 +404,26 @@ app.post('/api/create-custom-token', async (req, res) => {
             const payload = JSON.parse(Buffer.from(jwtParts[1], 'base64').toString('utf-8'));
             console.log('Custom token payload audience:', payload.aud);
             console.log('Custom token payload issuer:', payload.iss);
-            console.log('Custom token payload subject (UID):', payload.sub);
+            console.log('Custom token payload subject (sub):', payload.sub);
+            console.log('Custom token payload uid field:', payload.uid);
             console.log('Custom token payload (full):', JSON.stringify(payload, null, 2));
             
             // The audience should be the Identity Toolkit endpoint (this is correct)
-            // But the subject should be the user's UID, not the service account
+            // The subject (sub) should be the user's UID, not the service account
+            // Firebase's signInWithCustomToken looks at 'sub', not 'uid'
             if (payload.sub !== decodedToken.uid) {
                 console.error('ERROR: Custom token subject does not match user UID!');
-                console.error('Expected UID:', decodedToken.uid);
-                console.error('Got subject:', payload.sub);
+                console.error('Expected UID (for sub field):', decodedToken.uid);
+                console.error('Got subject (sub):', payload.sub);
+                console.error('Token has uid field:', payload.uid, '(this is correct but Firebase ignores it)');
                 console.error('This is why Firebase is rejecting the token!');
+                console.error('Firebase signInWithCustomToken uses the "sub" field, not "uid"');
+                
+                // Check if uid field exists and is correct
+                if (payload.uid === decodedToken.uid) {
+                    console.error('The token has the correct UID in the "uid" field, but "sub" is wrong!');
+                    console.error('This suggests a bug in Firebase Admin SDK or initialization issue.');
+                }
             } else {
                 console.log('✓ Custom token subject matches user UID');
             }

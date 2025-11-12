@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5500;
 // Initialize Firebase Admin SDK
 // Using service account file (same directory as server.js)
 try {
-    const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-4c24a36767.json');
+    const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
     });

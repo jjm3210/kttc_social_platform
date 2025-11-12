@@ -323,6 +323,13 @@ app.post('/api/create-custom-token', async (req, res) => {
         // Create custom token for the user
         // Use the admin app instance to ensure we're using the correct project
         const auth = admin.auth();
+        
+        // Verify the UID we're about to use
+        console.log('About to create custom token with UID:', decodedToken.uid);
+        console.log('UID type:', typeof decodedToken.uid);
+        console.log('UID length:', decodedToken.uid ? decodedToken.uid.length : 'null');
+        
+        // Create the custom token - this should set the subject (sub) to the user's UID
         const customToken = await auth.createCustomToken(decodedToken.uid);
         
         // Log additional info for debugging
@@ -357,17 +364,23 @@ app.post('/api/create-custom-token', async (req, res) => {
         console.log(`Custom token preview (first 50 chars): ${customToken.substring(0, 50)}...`);
         console.log(`JWT parts count: ${jwtParts.length}`);
         
-        // Decode JWT payload to verify audience (should match project ID)
+        // Decode JWT payload to verify structure
         try {
             const payload = JSON.parse(Buffer.from(jwtParts[1], 'base64').toString('utf-8'));
             console.log('Custom token payload audience:', payload.aud);
             console.log('Custom token payload issuer:', payload.iss);
             console.log('Custom token payload subject (UID):', payload.sub);
+            console.log('Custom token payload (full):', JSON.stringify(payload, null, 2));
             
-            // Verify audience matches project ID
-            if (payload.aud !== 'kttc-hub-auth') {
-                console.error('WARNING: Custom token audience does not match project ID!');
-                console.error('Expected: kttc-hub-auth, Got:', payload.aud);
+            // The audience should be the Identity Toolkit endpoint (this is correct)
+            // But the subject should be the user's UID, not the service account
+            if (payload.sub !== decodedToken.uid) {
+                console.error('ERROR: Custom token subject does not match user UID!');
+                console.error('Expected UID:', decodedToken.uid);
+                console.error('Got subject:', payload.sub);
+                console.error('This is why Firebase is rejecting the token!');
+            } else {
+                console.log('✓ Custom token subject matches user UID');
             }
         } catch (e) {
             console.warn('Could not decode JWT payload for inspection:', e.message);

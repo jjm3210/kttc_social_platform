@@ -20,11 +20,31 @@ const database = firebase.database();
 async function authenticateWithCustomToken(customToken) {
     try {
         console.log('Attempting to sign in with custom token...');
-        const userCredential = await auth.signInWithCustomToken(customToken);
+        
+        // Ensure token is a string and trim any whitespace
+        const token = String(customToken).trim();
+        
+        // Validate token format (should be a JWT-like string with dots)
+        if (!token || token.length < 10) {
+            throw new Error('Invalid custom token: token is too short or empty');
+        }
+        
+        // Check if token looks like a JWT (has at least two dots)
+        const parts = token.split('.');
+        if (parts.length < 2) {
+            throw new Error('Invalid custom token format: expected JWT format');
+        }
+        
+        console.log('Token validation passed. Length:', token.length);
+        console.log('Token preview (first 50 chars):', token.substring(0, 50) + '...');
+        
+        const userCredential = await auth.signInWithCustomToken(token);
         console.log('Successfully authenticated with custom token:', userCredential.user.email);
         return userCredential.user;
     } catch (error) {
         console.error('Error signing in with custom token:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
         throw error;
     }
 }
@@ -77,27 +97,59 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (idToken) {
         console.log('Found ID token in URL - exchanging for custom token...');
         try {
+            // URLSearchParams.get() automatically decodes URL-encoded values
+            // But let's ensure we have a valid token string
+            const decodedIdToken = idToken.trim();
+            
+            if (!decodedIdToken || decodedIdToken.length < 10) {
+                throw new Error('Invalid ID token: token appears to be empty or corrupted');
+            }
+            
+            console.log('ID token extracted. Length:', decodedIdToken.length);
+            console.log('ID token preview (first 50 chars):', decodedIdToken.substring(0, 50) + '...');
+            
             // Exchange ID token for custom token via server (same origin, no mixed content)
             const response = await fetch(`${API_BASE_URL}/create-custom-token`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ idToken: idToken })
+                body: JSON.stringify({ idToken: decodedIdToken })
             });
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                console.error('Server error response:', errorData);
                 throw new Error(errorData.error || `Server returned status ${response.status}`);
             }
             
             const data = await response.json();
-            if (!data.success || !data.customToken) {
-                throw new Error('Failed to get custom token from server');
+            console.log('Token exchange response received:', { 
+                success: data.success, 
+                hasCustomToken: !!data.customToken,
+                customTokenType: typeof data.customToken
+            });
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Server returned unsuccessful response');
             }
             
-            console.log('Custom token obtained, authenticating...');
-            await authenticateWithCustomToken(data.customToken);
+            if (!data.customToken) {
+                throw new Error('Server response missing customToken field');
+            }
+            
+            // Ensure customToken is a string and properly extracted
+            const customTokenString = String(data.customToken).trim();
+            
+            if (!customTokenString || customTokenString.length < 10) {
+                throw new Error('Custom token from server is invalid: token is too short or empty');
+            }
+            
+            console.log('Custom token extracted successfully. Length:', customTokenString.length);
+            console.log('Custom token preview (first 50 chars):', customTokenString.substring(0, 50) + '...');
+            
+            console.log('Authenticating with custom token...');
+            await authenticateWithCustomToken(customTokenString);
             
             // Clean up URL by removing token parameter
             const newUrl = window.location.href.split('?')[0];
@@ -105,6 +157,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             console.log('Successfully authenticated with custom token');
         } catch (error) {
             console.error('Failed to authenticate with ID token:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+            
             // Show error message and redirect to hub after a delay
             const loadingScreen = document.getElementById('loadingScreen');
             const mainApp = document.getElementById('mainApp');
@@ -123,13 +181,28 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Legacy support: direct custom token (if passed directly)
         console.log('Found custom token in URL - attempting to authenticate...');
         try {
-            await authenticateWithCustomToken(customToken);
+            // URLSearchParams.get() automatically decodes, but ensure it's a string
+            const decodedToken = String(customToken).trim();
+            
+            if (!decodedToken || decodedToken.length < 10) {
+                throw new Error('Invalid custom token: token appears to be empty or corrupted');
+            }
+            
+            console.log('Custom token extracted. Length:', decodedToken.length);
+            await authenticateWithCustomToken(decodedToken);
+            
             // Clean up URL by removing token parameter
             const newUrl = window.location.href.split('?')[0];
             window.history.replaceState({}, document.title, newUrl);
             console.log('Successfully authenticated with custom token');
         } catch (error) {
             console.error('Failed to authenticate with custom token:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+            
             // Show error message and redirect to hub after a delay
             const loadingScreen = document.getElementById('loadingScreen');
             const mainApp = document.getElementById('mainApp');

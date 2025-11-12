@@ -13,9 +13,11 @@ const PORT = process.env.PORT || 5500;
 try {
     const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
     admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+        credential: admin.credential.cert(serviceAccount),
+        projectId: 'kttc-hub-auth' // Explicitly set project ID to match client config
     });
     console.log('Firebase Admin SDK initialized from service account file');
+    console.log('Project ID:', serviceAccount.project_id);
 } catch (error) {
     console.error('Error initializing Firebase Admin SDK:', error);
     console.warn('Custom token endpoint will not work without Firebase Admin SDK.');
@@ -311,7 +313,35 @@ app.post('/api/create-custom-token', async (req, res) => {
         // Create custom token for the user
         const customToken = await admin.auth().createCustomToken(decodedToken.uid);
         
+        // Validate the custom token format
+        if (!customToken || typeof customToken !== 'string') {
+            console.error('Invalid custom token returned from Firebase Admin SDK');
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to generate valid custom token'
+            });
+        }
+        
+        // Validate JWT structure (should have 3 parts)
+        const jwtParts = customToken.split('.');
+        if (jwtParts.length !== 3) {
+            console.error(`Invalid JWT structure: expected 3 parts, got ${jwtParts.length}`);
+            console.error('Token preview:', customToken.substring(0, 100));
+            return res.status(500).json({
+                success: false,
+                error: 'Custom token has invalid JWT structure'
+            });
+        }
+        
         console.log(`Custom token created for user: ${decodedToken.email} (${decodedToken.uid})`);
+        console.log(`Custom token length: ${customToken.length}`);
+        console.log(`Custom token preview (first 50 chars): ${customToken.substring(0, 50)}...`);
+        console.log(`JWT parts count: ${jwtParts.length}`);
+        
+        // Ensure token doesn't have any unexpected characters that could corrupt it
+        if (customToken.includes('\n') || customToken.includes('\r') || customToken.includes(' ')) {
+            console.warn('Warning: Custom token contains unexpected whitespace characters');
+        }
         
         res.json({
             success: true,

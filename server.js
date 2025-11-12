@@ -5,6 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 5500;
@@ -25,6 +26,17 @@ try {
             // Delete and reinitialize if wrong project
             adminApp.delete();
             adminApp = null;
+        } else {
+            // App is already initialized correctly, but we still need serviceAccountData for token fixing
+            // Try to load it if not already set
+            if (!serviceAccountData) {
+                try {
+                    serviceAccountData = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
+                    console.log('Loaded service account data for token fixing');
+                } catch (e) {
+                    console.warn('Could not load service account data for token fixing:', e.message);
+                }
+            }
         }
     } catch (e) {
         // Not initialized yet, proceed with initialization
@@ -64,6 +76,7 @@ try {
 // Helper function to fix the JWT's sub field
 // The Firebase Admin SDK sometimes incorrectly sets sub to the service account email
 // This function fixes it by re-signing the JWT with the correct sub field
+// IMPORTANT: We preserve ALL original fields to maintain Firebase token format
 function fixCustomTokenSub(customToken, correctUid, serviceAccount) {
     try {
         // Decode the JWT without verification (we'll re-sign it)
@@ -85,33 +98,60 @@ function fixCustomTokenSub(customToken, correctUid, serviceAccount) {
         // Store original sub for logging
         const originalSub = payload.sub;
         
-        // Fix the sub field
-        payload.sub = correctUid;
-        payload.uid = correctUid; // Also ensure uid field is correct
+        // Create a new payload with ALL original fields preserved
+        // Only change sub and uid fields
+        const fixedPayload = {
+            ...payload,  // Preserve all original fields (aud, iss, iat, exp, etc.)
+            sub: correctUid,  // Fix the subject
+            uid: correctUid   // Ensure uid is also correct
+        };
         
         // Get the private key from the service account
         const privateKey = serviceAccount.private_key;
         
-        // Re-sign the JWT, preserving the algorithm and key ID from the original
-        // jwt.sign will automatically set iat, but we preserve exp if it exists
+        // Re-sign the JWT with exact same structure
+        // Use jwt.sign but with noExpiration: true to preserve original exp
+        // Actually, we need to manually control iat/exp to match original
         const signOptions = {
-            algorithm: header.alg || 'RS256'
+            algorithm: header.alg || 'RS256',
+            noTimestamp: true  // Don't automatically set iat
         };
         
-        // Preserve key ID if present
+        // Preserve key ID if present (important for Firebase)
         if (header.kid) {
             signOptions.keyid = header.kid;
         }
         
-        // Preserve expiration if present
-        // exp and iat are already in seconds (JWT standard)
-        if (payload.exp && payload.iat) {
-            signOptions.expiresIn = payload.exp - payload.iat; // Duration in seconds
+        // Preserve original timestamps exactly
+        fixedPayload.iat = payload.iat; // Preserve original issued at time
+        fixedPayload.exp = payload.exp; // Preserve original expiration
+        
+        // Use jwt.sign with noTimestamp to prevent automatic iat addition
+        // But we've already set iat manually above, so this should preserve it
+        const fixedToken = jwt.sign(fixedPayload, privateKey, signOptions);
+        
+        // Verify the signed token has the correct structure
+        const verifyParts = fixedToken.split('.');
+        if (verifyParts.length === 3) {
+            try {
+                const verifyPayload = JSON.parse(Buffer.from(verifyParts[1], 'base64').toString('utf-8'));
+                // Double-check that our changes persisted
+                if (verifyPayload.sub !== correctUid) {
+                    console.error('WARNING: Token signing changed sub field! Expected:', correctUid, 'Got:', verifyPayload.sub);
+                }
+                if (verifyPayload.iat !== payload.iat) {
+                    console.warn('WARNING: Token signing changed iat! Original:', payload.iat, 'New:', verifyPayload.iat);
+                }
+                if (verifyPayload.exp !== payload.exp) {
+                    console.warn('WARNING: Token signing changed exp! Original:', payload.exp, 'New:', verifyPayload.exp);
+                }
+            } catch (e) {
+                console.warn('Could not verify fixed token structure:', e.message);
+            }
         }
         
-        const fixedToken = jwt.sign(payload, privateKey, signOptions);
-        
         console.log('Fixed custom token: sub field corrected from', originalSub, 'to', correctUid);
+        console.log('Preserved original iat:', payload.iat, 'exp:', payload.exp);
         return fixedToken;
     } catch (error) {
         console.error('Error fixing custom token sub field:', error);
@@ -486,15 +526,38 @@ app.post('/api/create-custom-token', async (req, res) => {
                 if (serviceAccountData) {
                     fixedToken = fixCustomTokenSub(customToken, decodedToken.uid, serviceAccountData);
                     
-                    // Verify the fix worked
+                    // Verify the fix worked and log full token details
                     const fixedParts = fixedToken.split('.');
                     if (fixedParts.length === 3) {
                         const fixedPayload = JSON.parse(Buffer.from(fixedParts[1], 'base64').toString('utf-8'));
+                        const fixedHeader = JSON.parse(Buffer.from(fixedParts[0], 'base64').toString('utf-8'));
+                        
+                        console.log('Fixed token header:', JSON.stringify(fixedHeader, null, 2));
+                        console.log('Fixed token payload:', JSON.stringify(fixedPayload, null, 2));
+                        
+                        // Validate required Firebase custom token fields
+                        const requiredFields = ['aud', 'iss', 'sub', 'uid', 'iat', 'exp'];
+                        const missingFields = requiredFields.filter(field => !(field in fixedPayload));
+                        
+                        if (missingFields.length > 0) {
+                            console.error('✗ Fixed token missing required fields:', missingFields);
+                        } else {
+                            console.log('✓ Fixed token has all required fields');
+                        }
+                        
                         if (fixedPayload.sub === decodedToken.uid) {
                             console.log('✓ Token fixed successfully! Sub field now matches UID');
+                            console.log('Fixed token sub:', fixedPayload.sub);
+                            console.log('Fixed token uid:', fixedPayload.uid);
+                            console.log('Fixed token aud:', fixedPayload.aud);
+                            console.log('Fixed token iss:', fixedPayload.iss);
                         } else {
                             console.error('✗ Token fix failed - sub field still incorrect');
+                            console.error('Expected sub:', decodedToken.uid);
+                            console.error('Got sub:', fixedPayload.sub);
                         }
+                    } else {
+                        console.error('✗ Fixed token has invalid JWT structure');
                     }
                 } else {
                     console.error('Cannot fix token: service account data not available');

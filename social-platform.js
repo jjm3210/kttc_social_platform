@@ -21,23 +21,36 @@ async function authenticateWithCustomToken(customToken) {
     try {
         console.log('Attempting to sign in with custom token...');
         
-        // Ensure token is a string and trim any whitespace
-        const token = String(customToken).trim();
+        // Use token exactly as provided - Firebase custom tokens are JWTs
+        // Only trim leading/trailing whitespace, don't modify the token itself
+        let token = customToken;
         
-        // Validate token format (should be a JWT-like string with dots)
+        // Ensure it's a string
+        if (typeof token !== 'string') {
+            token = String(token);
+        }
+        
+        // Trim only whitespace (JWTs shouldn't have any, but be safe)
+        token = token.trim();
+        
+        // Validate token format (should be a JWT with exactly 3 parts)
         if (!token || token.length < 10) {
             throw new Error('Invalid custom token: token is too short or empty');
         }
         
-        // Check if token looks like a JWT (has at least two dots)
+        // Check if token looks like a JWT (must have exactly 3 parts separated by dots)
         const parts = token.split('.');
-        if (parts.length < 2) {
-            throw new Error('Invalid custom token format: expected JWT format');
+        if (parts.length !== 3) {
+            console.error('Token does not have 3 JWT parts. Parts count:', parts.length);
+            console.error('Token preview:', token.substring(0, 100));
+            throw new Error('Invalid custom token format: expected JWT with 3 parts (header.payload.signature)');
         }
         
         console.log('Token validation passed. Length:', token.length);
         console.log('Token preview (first 50 chars):', token.substring(0, 50) + '...');
+        console.log('JWT parts count:', parts.length);
         
+        // Use the token exactly as-is - Firebase will validate it
         const userCredential = await auth.signInWithCustomToken(token);
         console.log('Successfully authenticated with custom token:', userCredential.user.email);
         return userCredential.user;
@@ -138,15 +151,34 @@ document.addEventListener('DOMContentLoaded', async function() {
                 throw new Error('Server response missing customToken field');
             }
             
-            // Ensure customToken is a string and properly extracted
-            const customTokenString = String(data.customToken).trim();
+            // Extract customToken exactly as returned - don't modify it
+            // Firebase custom tokens are JWTs and must be used exactly as returned
+            let customTokenString = data.customToken;
+            
+            // Only convert to string if it's not already a string (shouldn't happen, but safety check)
+            if (typeof customTokenString !== 'string') {
+                console.warn('Custom token is not a string, converting...', typeof customTokenString);
+                customTokenString = String(customTokenString);
+            }
+            
+            // Trim only leading/trailing whitespace (not internal spaces which shouldn't exist in JWTs)
+            customTokenString = customTokenString.trim();
             
             if (!customTokenString || customTokenString.length < 10) {
                 throw new Error('Custom token from server is invalid: token is too short or empty');
             }
             
+            // Validate it looks like a JWT (should have 3 parts separated by dots)
+            const jwtParts = customTokenString.split('.');
+            if (jwtParts.length !== 3) {
+                console.error('Custom token does not have 3 JWT parts. Parts count:', jwtParts.length);
+                console.error('Token preview:', customTokenString.substring(0, 100));
+                throw new Error('Custom token format invalid: expected JWT with 3 parts');
+            }
+            
             console.log('Custom token extracted successfully. Length:', customTokenString.length);
             console.log('Custom token preview (first 50 chars):', customTokenString.substring(0, 50) + '...');
+            console.log('JWT parts count:', jwtParts.length);
             
             console.log('Authenticating with custom token...');
             await authenticateWithCustomToken(customTokenString);

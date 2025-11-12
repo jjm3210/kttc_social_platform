@@ -48,8 +48,11 @@ let allPosts = [];
 let selectedFiles = [];
 let pageShown = false;
 
-// Show the page immediately when DOM is ready - don't wait for authentication
-document.addEventListener('DOMContentLoaded', function() {
+// Check authentication and permissions
+let authCheckTimeout = null;
+
+// Show the page immediately when DOM is ready and check for custom token
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded - showing page immediately');
     const loadingScreen = document.getElementById('loadingScreen');
     const mainApp = document.getElementById('mainApp');
@@ -62,19 +65,11 @@ document.addEventListener('DOMContentLoaded', function() {
         pageShown = true;
     }
     
-    console.log('Page displayed - authentication will be checked in background');
-});
-
-// Check authentication and permissions
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
-let authCheckTimeout = null;
-
-// Check for custom token in URL when page loads (passed from hub)
-// The hub should get user's ID token, send it to backend to create custom token,
-// then pass that custom token as URL parameter
-document.addEventListener('DOMContentLoaded', async function() {
+    console.log('Page displayed - checking for authentication token...');
+    
+    // Check for custom token in URL when page loads (passed from hub)
+    // The hub should get user's ID token, send it to backend to create custom token,
+    // then pass that custom token as URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     const customToken = urlParams.get('token');
     
@@ -92,9 +87,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 });
 
-=======
->>>>>>> 8b3a9110c0c896c623ad22567ccd5972968a7982
->>>>>>> Stashed changes
 auth.onAuthStateChanged(async (user) => {
     // Ensure page is shown (in case auth fires before DOMContentLoaded)
     if (!pageShown) {

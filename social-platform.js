@@ -14,6 +14,21 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const database = firebase.database();
 
+// Authenticate using custom token passed from hub
+// The hub should get the user's ID token and exchange it for a custom token via backend
+// Then pass that custom token as a URL parameter
+async function authenticateWithCustomToken(customToken) {
+    try {
+        console.log('Attempting to sign in with custom token...');
+        const userCredential = await auth.signInWithCustomToken(customToken);
+        console.log('Successfully authenticated with custom token:', userCredential.user.email);
+        return userCredential.user;
+    } catch (error) {
+        console.error('Error signing in with custom token:', error);
+        throw error;
+    }
+}
+
 // Configuration
 // API endpoint - using relative path since frontend and API are on same origin
 // The API supports:
@@ -51,6 +66,35 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Check authentication and permissions
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+let authCheckTimeout = null;
+
+// Check for custom token in URL when page loads (passed from hub)
+// The hub should get user's ID token, send it to backend to create custom token,
+// then pass that custom token as URL parameter
+document.addEventListener('DOMContentLoaded', async function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const customToken = urlParams.get('token');
+    
+    if (customToken) {
+        console.log('Found custom token in URL - attempting to authenticate...');
+        try {
+            await authenticateWithCustomToken(customToken);
+            // Clean up URL by removing token parameter
+            const newUrl = window.location.href.split('?')[0];
+            window.history.replaceState({}, document.title, newUrl);
+        } catch (error) {
+            console.error('Failed to authenticate with custom token:', error);
+            // If authentication fails, user will be redirected to hub
+        }
+    }
+});
+
+=======
+>>>>>>> 8b3a9110c0c896c623ad22567ccd5972968a7982
+>>>>>>> Stashed changes
 auth.onAuthStateChanged(async (user) => {
     // Ensure page is shown (in case auth fires before DOMContentLoaded)
     if (!pageShown) {

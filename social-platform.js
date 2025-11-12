@@ -67,13 +67,60 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     console.log('Page displayed - checking for authentication token...');
     
-    // Check for custom token in URL when page loads (passed from hub)
-    // The hub should get user's ID token, send it to backend to create custom token,
-    // then pass that custom token as URL parameter
+    // Check for ID token or custom token in URL when page loads (passed from hub)
+    // The hub passes the ID token, which we exchange server-side for a custom token
+    // to avoid mixed content issues (HTTPS hub -> HTTP social platform)
     const urlParams = new URLSearchParams(window.location.search);
-    const customToken = urlParams.get('token');
+    const idToken = urlParams.get('idToken');
+    const customToken = urlParams.get('token'); // Legacy support
     
-    if (customToken) {
+    if (idToken) {
+        console.log('Found ID token in URL - exchanging for custom token...');
+        try {
+            // Exchange ID token for custom token via server (same origin, no mixed content)
+            const response = await fetch(`${API_BASE_URL}/create-custom-token`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ idToken: idToken })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server returned status ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (!data.success || !data.customToken) {
+                throw new Error('Failed to get custom token from server');
+            }
+            
+            console.log('Custom token obtained, authenticating...');
+            await authenticateWithCustomToken(data.customToken);
+            
+            // Clean up URL by removing token parameter
+            const newUrl = window.location.href.split('?')[0];
+            window.history.replaceState({}, document.title, newUrl);
+            console.log('Successfully authenticated with custom token');
+        } catch (error) {
+            console.error('Failed to authenticate with ID token:', error);
+            // Show error message and redirect to hub after a delay
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainApp = document.getElementById('mainApp');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (mainApp) mainApp.style.display = 'block';
+            
+            // Show error message
+            alert(`Authentication failed: ${error.message}\n\nRedirecting to Hub...`);
+            
+            // Redirect to hub after showing error
+            setTimeout(() => {
+                window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
+            }, 2000);
+        }
+    } else if (customToken) {
+        // Legacy support: direct custom token (if passed directly)
         console.log('Found custom token in URL - attempting to authenticate...');
         try {
             await authenticateWithCustomToken(customToken);

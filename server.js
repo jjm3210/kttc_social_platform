@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 5500;
@@ -11,6 +12,7 @@ const PORT = process.env.PORT || 5500;
 // Initialize Firebase Admin SDK
 // Using service account file (same directory as server.js)
 let adminApp;
+let serviceAccountData = null; // Store service account for JWT fixing
 try {
     // Check if already initialized to avoid "app already exists" errors
     try {
@@ -30,14 +32,14 @@ try {
     
     // Initialize if not already done
     if (!adminApp) {
-        const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
+        serviceAccountData = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
         adminApp = admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
+            credential: admin.credential.cert(serviceAccountData),
             projectId: 'kttc-hub-auth' // Explicitly set project ID to match client config
         });
         console.log('Firebase Admin SDK initialized from service account file');
-        console.log('Project ID:', serviceAccount.project_id);
-        console.log('Service account email:', serviceAccount.client_email);
+        console.log('Project ID:', serviceAccountData.project_id);
+        console.log('Service account email:', serviceAccountData.client_email);
         console.log('App name:', adminApp.name);
         console.log('App project ID:', adminApp.options.projectId);
     }
@@ -47,15 +49,75 @@ try {
     // Try fallback to environment variable if file doesn't exist
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         try {
-            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            serviceAccountData = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
             adminApp = admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount),
-                projectId: serviceAccount.project_id
+                credential: admin.credential.cert(serviceAccountData),
+                projectId: serviceAccountData.project_id
             });
             console.log('Firebase Admin SDK initialized from environment variable (fallback)');
         } catch (envError) {
             console.error('Error initializing from environment variable:', envError);
         }
+    }
+}
+
+// Helper function to fix the JWT's sub field
+// The Firebase Admin SDK sometimes incorrectly sets sub to the service account email
+// This function fixes it by re-signing the JWT with the correct sub field
+function fixCustomTokenSub(customToken, correctUid, serviceAccount) {
+    try {
+        // Decode the JWT without verification (we'll re-sign it)
+        const parts = customToken.split('.');
+        if (parts.length !== 3) {
+            throw new Error('Invalid JWT structure');
+        }
+        
+        // Decode the header and payload
+        const header = JSON.parse(Buffer.from(parts[0], 'base64').toString('utf-8'));
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+        
+        // Check if sub needs to be fixed
+        if (payload.sub === correctUid) {
+            // Already correct, return as-is
+            return customToken;
+        }
+        
+        // Store original sub for logging
+        const originalSub = payload.sub;
+        
+        // Fix the sub field
+        payload.sub = correctUid;
+        payload.uid = correctUid; // Also ensure uid field is correct
+        
+        // Get the private key from the service account
+        const privateKey = serviceAccount.private_key;
+        
+        // Re-sign the JWT, preserving the algorithm and key ID from the original
+        // jwt.sign will automatically set iat, but we preserve exp if it exists
+        const signOptions = {
+            algorithm: header.alg || 'RS256'
+        };
+        
+        // Preserve key ID if present
+        if (header.kid) {
+            signOptions.keyid = header.kid;
+        }
+        
+        // Preserve expiration if present
+        // exp and iat are already in seconds (JWT standard)
+        if (payload.exp && payload.iat) {
+            signOptions.expiresIn = payload.exp - payload.iat; // Duration in seconds
+        }
+        
+        const fixedToken = jwt.sign(payload, privateKey, signOptions);
+        
+        console.log('Fixed custom token: sub field corrected from', originalSub, 'to', correctUid);
+        return fixedToken;
+    } catch (error) {
+        console.error('Error fixing custom token sub field:', error);
+        console.error('Error stack:', error.stack);
+        // Return original token if fix fails
+        return customToken;
     }
 }
 
@@ -335,17 +397,11 @@ app.post('/api/create-custom-token', async (req, res) => {
         }
         
         // Create custom token for the user
-        // Get the auth instance from the default app to ensure correct initialization
-        const defaultApp = admin.app();
-        const auth = defaultApp.auth();
-        
+        // Use admin.auth() directly to ensure we're using the default app
         // Verify the UID we're about to use
         console.log('About to create custom token with UID:', decodedToken.uid);
         console.log('UID type:', typeof decodedToken.uid);
         console.log('UID length:', decodedToken.uid ? decodedToken.uid.length : 'null');
-        console.log('Default app project ID:', defaultApp.options.projectId);
-        console.log('Default app name:', defaultApp.name);
-        console.log('Default app credential type:', defaultApp.options.credential ? 'cert' : 'none');
         
         // Ensure UID is a non-empty string
         if (!decodedToken.uid || typeof decodedToken.uid !== 'string') {
@@ -361,11 +417,16 @@ app.post('/api/create-custom-token', async (req, res) => {
         console.log('UID string length:', uidString.length);
         console.log('UID string matches original:', uidString === decodedToken.uid);
         
-        // Create the custom token - this should set the subject (sub) to the user's UID
-        // The Admin SDK should automatically set sub=uid, but we're seeing sub=service account email
-        // This suggests an initialization or version issue
-        // Try without additional claims first
-        const customToken = await auth.createCustomToken(uidString);
+        // Verify the app is correctly initialized
+        const defaultApp = admin.app();
+        console.log('Default app project ID:', defaultApp.options.projectId);
+        console.log('Default app name:', defaultApp.name);
+        console.log('Default app credential type:', defaultApp.options.credential ? 'cert' : 'none');
+        
+        // Create the custom token using admin.auth() directly
+        // This should set the subject (sub) to the user's UID
+        // The Admin SDK should automatically set sub=uid
+        const customToken = await admin.auth().createCustomToken(uidString);
         
         // Log additional info for debugging
         console.log('Creating custom token for UID:', decodedToken.uid);
@@ -399,7 +460,8 @@ app.post('/api/create-custom-token', async (req, res) => {
         console.log(`Custom token preview (first 50 chars): ${customToken.substring(0, 50)}...`);
         console.log(`JWT parts count: ${jwtParts.length}`);
         
-        // Decode JWT payload to verify structure
+        // Decode JWT payload to verify structure and fix if needed
+        let fixedToken = customToken;
         try {
             const payload = JSON.parse(Buffer.from(jwtParts[1], 'base64').toString('utf-8'));
             console.log('Custom token payload audience:', payload.aud);
@@ -418,11 +480,24 @@ app.post('/api/create-custom-token', async (req, res) => {
                 console.error('Token has uid field:', payload.uid, '(this is correct but Firebase ignores it)');
                 console.error('This is why Firebase is rejecting the token!');
                 console.error('Firebase signInWithCustomToken uses the "sub" field, not "uid"');
+                console.error('Attempting to fix the token...');
                 
-                // Check if uid field exists and is correct
-                if (payload.uid === decodedToken.uid) {
-                    console.error('The token has the correct UID in the "uid" field, but "sub" is wrong!');
-                    console.error('This suggests a bug in Firebase Admin SDK or initialization issue.');
+                // Fix the token if we have the service account data
+                if (serviceAccountData) {
+                    fixedToken = fixCustomTokenSub(customToken, decodedToken.uid, serviceAccountData);
+                    
+                    // Verify the fix worked
+                    const fixedParts = fixedToken.split('.');
+                    if (fixedParts.length === 3) {
+                        const fixedPayload = JSON.parse(Buffer.from(fixedParts[1], 'base64').toString('utf-8'));
+                        if (fixedPayload.sub === decodedToken.uid) {
+                            console.log('✓ Token fixed successfully! Sub field now matches UID');
+                        } else {
+                            console.error('✗ Token fix failed - sub field still incorrect');
+                        }
+                    }
+                } else {
+                    console.error('Cannot fix token: service account data not available');
                 }
             } else {
                 console.log('✓ Custom token subject matches user UID');
@@ -437,10 +512,11 @@ app.post('/api/create-custom-token', async (req, res) => {
         }
         
         // Send response with explicit content type and ensure token is sent as-is
+        // Use the fixed token if it was corrected
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.json({
             success: true,
-            customToken: customToken
+            customToken: fixedToken
         });
     } catch (error) {
         console.error('Error creating custom token:', error);

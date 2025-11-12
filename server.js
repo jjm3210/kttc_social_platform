@@ -280,10 +280,12 @@ app.use((error, req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`
 ========================================`);
-    console.log(`File Upload API Server`);
+    console.log(`Social Platform Server`);
     console.log(`========================================`);
     console.log(`Server running on http://0.0.0.0:${PORT}`);
     console.log(`Accessible at: http://kttc-dockerhost.kttc.local:${PORT}`);
+    console.log(`Frontend: http://kttc-dockerhost.kttc.local:${PORT}/`);
+    console.log(`API Base: http://kttc-dockerhost.kttc.local:${PORT}/api`);
     console.log(`Upload directory: ${UPLOAD_DIR}`);
     console.log(`Health check: http://kttc-dockerhost.kttc.local:${PORT}/api/health`);
     console.log(`========================================

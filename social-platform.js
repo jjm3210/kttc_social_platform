@@ -31,15 +31,37 @@ let userPermissions = null;
 let isAdmin = false;
 let allPosts = [];
 let selectedFiles = [];
+let pageShown = false;
+
+// Show the page immediately when DOM is ready - don't wait for authentication
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded - showing page immediately');
+    const loadingScreen = document.getElementById('loadingScreen');
+    const mainApp = document.getElementById('mainApp');
+    
+    if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+    }
+    if (mainApp) {
+        mainApp.style.display = 'block';
+        pageShown = true;
+    }
+    
+    console.log('Page displayed - authentication will be checked in background');
+});
 
 // Check authentication and permissions
-let authCheckTimeout = null;
-
 auth.onAuthStateChanged(async (user) => {
-    // Clear any pending redirect timeout
-    if (authCheckTimeout) {
-        clearTimeout(authCheckTimeout);
-        authCheckTimeout = null;
+    // Ensure page is shown (in case auth fires before DOMContentLoaded)
+    if (!pageShown) {
+        const loadingScreen = document.getElementById('loadingScreen');
+        const mainApp = document.getElementById('mainApp');
+        
+        if (loadingScreen) loadingScreen.style.display = 'none';
+        if (mainApp) {
+            mainApp.style.display = 'block';
+            pageShown = true;
+        }
     }
     
     if (user) {
@@ -94,10 +116,7 @@ auth.onAuthStateChanged(async (user) => {
         // Check if user is editor (has social but not socialAdmin)
         const isEditor = hasSocial && !hasSocialAdmin;
         
-        // Show main app
-        document.getElementById('loadingScreen').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'block';
-        
+        // Page is already shown, just update UI for authenticated user
         // Show editor welcome section if user is editor or admin
         if (isEditor || isAdmin) {
             showEditorWelcomeSection(userPermissions);
@@ -106,23 +125,15 @@ auth.onAuthStateChanged(async (user) => {
         // Load initial data
         loadPosts();
     } else {
-        // Wait a moment for Firebase to check for existing sessions
-        // This is especially important when accessing directly from Docker host
-        authCheckTimeout = setTimeout(() => {
-            // Check if we're accessing from Docker host
-            const isDockerHost = window.location.hostname.includes('kttc-dockerhost') || 
-                                 window.location.hostname.includes('kttc.local');
-            
-            if (isDockerHost) {
-                // If accessing from Docker host, redirect to hub for authentication
-                // Include return URL so user can come back after auth
-                const returnUrl = encodeURIComponent(window.location.href);
-                window.location.href = `https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html?returnUrl=${returnUrl}`;
-            } else {
-                // If accessing from SFTP server, redirect to hub
-                window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
-            }
-        }, 1000); // Wait 1 second for Firebase to check for existing sessions
+        // No authenticated user - page is already shown
+        // Update UI to show authentication status
+        const userEmailSpan = document.getElementById('userEmail');
+        if (userEmailSpan) {
+            userEmailSpan.textContent = 'Not authenticated';
+        }
+        
+        console.log('No authenticated user - page is visible but features require authentication');
+        // No redirect - page stays visible
     }
 });
 
@@ -149,6 +160,42 @@ async function getUserPermissions(uid) {
 function showAccessDenied() {
     document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('accessDeniedScreen').style.display = 'flex';
+}
+
+// Show authentication required screen
+function showAuthenticationRequired() {
+    document.getElementById('loadingScreen').style.display = 'none';
+    const authRequiredScreen = document.getElementById('authRequiredScreen');
+    if (authRequiredScreen) {
+        authRequiredScreen.style.display = 'flex';
+    } else {
+        // Fallback: show access denied screen with updated message
+        const accessDeniedScreen = document.getElementById('accessDeniedScreen');
+        const message = accessDeniedScreen.querySelector('p');
+        const button = accessDeniedScreen.querySelector('button');
+        
+        if (message) {
+            message.textContent = 'Please authenticate to access the Social Platform.';
+        }
+        
+        // Update button to redirect to hub with return URL if accessing from Docker host
+        if (button) {
+            const isDockerHost = window.location.hostname.includes('kttc-dockerhost') || 
+                                 window.location.hostname.includes('kttc.local');
+            if (isDockerHost) {
+                const returnUrl = encodeURIComponent(window.location.href);
+                button.onclick = () => {
+                    window.location.href = `https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html?returnUrl=${returnUrl}`;
+                };
+            } else {
+                button.onclick = () => {
+                    window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
+                };
+            }
+        }
+        
+        accessDeniedScreen.style.display = 'flex';
+    }
 }
 
 // Logout

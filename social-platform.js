@@ -136,7 +136,19 @@ document.addEventListener('DOMContentLoaded', async function() {
                 throw new Error(errorData.error || `Server returned status ${response.status}`);
             }
             
-            const data = await response.json();
+            const responseText = await response.text();
+            console.log('Raw response text length:', responseText.length);
+            console.log('Raw response preview (first 200 chars):', responseText.substring(0, 200));
+            
+            // Parse JSON manually to ensure no corruption
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('Failed to parse JSON response:', parseError);
+                throw new Error('Invalid JSON response from server');
+            }
+            
             console.log('Token exchange response received:', { 
                 success: data.success, 
                 hasCustomToken: !!data.customToken,
@@ -162,7 +174,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             
             // Trim only leading/trailing whitespace (not internal spaces which shouldn't exist in JWTs)
+            const originalLength = customTokenString.length;
             customTokenString = customTokenString.trim();
+            if (originalLength !== customTokenString.length) {
+                console.warn(`Token was trimmed: ${originalLength} -> ${customTokenString.length} chars`);
+            }
             
             if (!customTokenString || customTokenString.length < 10) {
                 throw new Error('Custom token from server is invalid: token is too short or empty');
@@ -176,9 +192,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                 throw new Error('Custom token format invalid: expected JWT with 3 parts');
             }
             
+            // Check for any characters that shouldn't be in a JWT
+            const invalidChars = customTokenString.match(/[^\w\-_.]/g);
+            if (invalidChars && invalidChars.length > 0) {
+                console.warn('Token contains potentially invalid characters:', invalidChars.slice(0, 10));
+            }
+            
             console.log('Custom token extracted successfully. Length:', customTokenString.length);
             console.log('Custom token preview (first 50 chars):', customTokenString.substring(0, 50) + '...');
             console.log('JWT parts count:', jwtParts.length);
+            console.log('JWT part lengths:', jwtParts.map(p => p.length));
             
             console.log('Authenticating with custom token...');
             await authenticateWithCustomToken(customTokenString);

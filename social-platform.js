@@ -80,10 +80,27 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Clean up URL by removing token parameter
             const newUrl = window.location.href.split('?')[0];
             window.history.replaceState({}, document.title, newUrl);
+            console.log('Successfully authenticated with custom token');
         } catch (error) {
             console.error('Failed to authenticate with custom token:', error);
-            // If authentication fails, user will be redirected to hub
+            // Show error message and redirect to hub after a delay
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainApp = document.getElementById('mainApp');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (mainApp) mainApp.style.display = 'block';
+            
+            // Show error message
+            alert(`Authentication failed: ${error.message}\n\nRedirecting to Hub...`);
+            
+            // Redirect to hub after showing error
+            setTimeout(() => {
+                window.location.href = 'https://webpubcontent.gray.tv/kttc/hub/kttc-hub.html';
+            }, 2000);
         }
+    } else {
+        // No token in URL - check if user is already authenticated
+        // If not, they should access through the hub
+        console.log('No authentication token found in URL');
     }
 });
 

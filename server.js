@@ -10,14 +10,23 @@ const PORT = process.env.PORT || 5500;
 
 // Initialize Firebase Admin SDK
 // Using service account file (same directory as server.js)
+let adminApp;
 try {
-    const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: 'kttc-hub-auth' // Explicitly set project ID to match client config
-    });
-    console.log('Firebase Admin SDK initialized from service account file');
-    console.log('Project ID:', serviceAccount.project_id);
+    // Check if already initialized to avoid "app already exists" errors
+    try {
+        adminApp = admin.app();
+        console.log('Firebase Admin SDK already initialized');
+    } catch (e) {
+        // Not initialized yet, proceed with initialization
+        const serviceAccount = require('./kttc-hub-auth-firebase-adminsdk-fbsvc-9939be2aa0.json');
+        adminApp = admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: 'kttc-hub-auth' // Explicitly set project ID to match client config
+        });
+        console.log('Firebase Admin SDK initialized from service account file');
+        console.log('Project ID:', serviceAccount.project_id);
+        console.log('Service account email:', serviceAccount.client_email);
+    }
 } catch (error) {
     console.error('Error initializing Firebase Admin SDK:', error);
     console.warn('Custom token endpoint will not work without Firebase Admin SDK.');
@@ -25,8 +34,9 @@ try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         try {
             const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-            admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount)
+            adminApp = admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+                projectId: serviceAccount.project_id
             });
             console.log('Firebase Admin SDK initialized from environment variable (fallback)');
         } catch (envError) {
@@ -311,7 +321,16 @@ app.post('/api/create-custom-token', async (req, res) => {
         }
         
         // Create custom token for the user
-        const customToken = await admin.auth().createCustomToken(decodedToken.uid);
+        // Use the admin app instance to ensure we're using the correct project
+        const auth = admin.auth();
+        const customToken = await auth.createCustomToken(decodedToken.uid);
+        
+        // Log additional info for debugging
+        console.log('Creating custom token for UID:', decodedToken.uid);
+        console.log('User email from ID token:', decodedToken.email);
+        console.log('Firebase project ID from Admin SDK:', admin.app().options.projectId);
+        console.log('ID token project ID:', decodedToken.aud); // Audience should match project
+        console.log('ID token issuer:', decodedToken.iss); // Issuer should be Firebase
         
         // Validate the custom token format
         if (!customToken || typeof customToken !== 'string') {

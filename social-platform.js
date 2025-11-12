@@ -49,8 +49,12 @@ async function authenticateWithCustomToken(customToken) {
         console.log('Token validation passed. Length:', token.length);
         console.log('Token preview (first 50 chars):', token.substring(0, 50) + '...');
         console.log('JWT parts count:', parts.length);
+        console.log('Firebase project ID (client):', firebaseConfig.projectId);
+        console.log('Firebase API key (client):', firebaseConfig.apiKey.substring(0, 20) + '...');
         
         // Use the token exactly as-is - Firebase will validate it
+        // Note: The token must be created for the same Firebase project as the client config
+        console.log('Calling Firebase signInWithCustomToken...');
         const userCredential = await auth.signInWithCustomToken(token);
         console.log('Successfully authenticated with custom token:', userCredential.user.email);
         return userCredential.user;
